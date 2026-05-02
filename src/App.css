@@ -89,6 +89,27 @@
   outline-offset: 2px;
 }
 
+.preview-links-inline {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 4px;
+  margin: 0;
+}
+
+.preview-links-sep {
+  color: var(--text);
+  font-weight: 700;
+  opacity: 0.65;
+}
+
+.page-url-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 22px;
+}
+
 .page-url-bar {
   align-items: center;
   background: var(--card-bg);
@@ -97,7 +118,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 22px;
   padding: 14px 16px;
 }
 

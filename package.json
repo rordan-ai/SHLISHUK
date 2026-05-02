@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "postbuild": "node scripts/copy-index-to-404.mjs",
+    "verify:pages": "node scripts/verify-pages-build.mjs",
+    "sync:github-secrets": "node scripts/sync-github-secrets.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

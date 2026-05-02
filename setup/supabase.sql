@@ -28,6 +28,21 @@ to authenticated
 using (true)
 with check (true);
 
+-- פרסום ישיר מהאפליקציה (מפתח anon) — מתאים לדף מבצעים; כל בעל הקישור ומפתח ה-anon יכול לדרוס.
+drop policy if exists "shlishuk_draft_anon_insert" on public.shlishuk_draft;
+drop policy if exists "shlishuk_draft_anon_update" on public.shlishuk_draft;
+
+create policy "shlishuk_draft_anon_insert"
+on public.shlishuk_draft for insert
+to anon
+with check (true);
+
+create policy "shlishuk_draft_anon_update"
+on public.shlishuk_draft for update
+to anon
+using (true)
+with check (true);
+
 insert into public.shlishuk_draft (id, payload)
 values ('default', '{"title":"","logoImage":null,"heroImage":null,"secondaryImage":null,"offerImages":[],"socialLinks":{"facebook":"","instagram":""}}'::jsonb)
 on conflict (id) do nothing;

@@ -1,4 +1,3 @@
-import type { Session } from '@supabase/supabase-js'
 import { getSupabaseBrowserClient, isSupabaseConfigured } from './supabaseClient'
 import type { LandingDraft } from './draftTypes'
 
@@ -108,10 +107,9 @@ async function loadDraftFromSupabase(): Promise<LandingDraft> {
   return normalizeDraft(data.payload as Partial<LandingDraft>)
 }
 
-async function saveDraftToSupabase(draft: LandingDraft, session: Session | null) {
+async function saveDraftToSupabase(draft: LandingDraft) {
   const client = getSupabaseBrowserClient()
   if (!client) throw new Error('Supabase not configured')
-  if (!session) throw new Error('Auth required')
 
   const { error } = await client.from('shlishuk_draft').upsert(
     {
@@ -132,10 +130,9 @@ export async function loadDraft(): Promise<LandingDraft> {
   return loadDraftFromIndexedDb()
 }
 
-export async function saveDraft(draft: LandingDraft, session: Session | null) {
+export async function saveDraft(draft: LandingDraft) {
   if (isSupabaseConfigured()) {
-    if (!session) return
-    return saveDraftToSupabase(draft, session)
+    return saveDraftToSupabase(draft)
   }
   return saveDraftToIndexedDb(draft)
 }

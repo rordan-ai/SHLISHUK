@@ -21,14 +21,29 @@ jobs:
       # Repository secrets → אותן הגדרות כמו באדמין מקומי (סנכרון לכתובת החיצונית)
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      VITE_PUBLIC_SITE_URL: ${{ secrets.VITE_PUBLIC_SITE_URL }}
+      # אופציונלי: כתובת יעד כדי לבדוק שהאתר וה־/admin מחזירים את ה-SPA (לאחר פריסה ראשונה יכול להיות ריק בפעם הראשונה)
+      VERIFY_PAGES_URL: ${{ secrets.VERIFY_PAGES_URL }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: אימות שה-Secrets הנדרשים מוגדרים
+        run: |
+          if [ -z "${{ secrets.VITE_SUPABASE_URL }}" ]; then echo "::error title=חסרים Secrets::הגדר ב-Repository Settings → Secrets את VITE_SUPABASE_URL"; exit 1; fi
+          if [ -z "${{ secrets.VITE_SUPABASE_ANON_KEY }}" ]; then echo "::error title=חסרים Secrets::הגדר את VITE_SUPABASE_ANON_KEY"; exit 1; fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
       - run: npm ci
-      - run: npm run build
+
+      - name: בנייה (+ postbuild יוצר dist/404.html)
+        run: npm run build
+
+      - name: אימות ארטיפקט דפים
+        run: npm run verify:pages
 
       - uses: actions/upload-pages-artifact@v3
         with:

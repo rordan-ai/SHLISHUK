@@ -1,5 +1,4 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
-import type { Session } from '@supabase/supabase-js'
+import { useEffect, useState, type ChangeEvent } from 'react'
 import './App.css'
 
 import type { LandingDraft, UploadedImage } from './draftTypes'
@@ -9,13 +8,6 @@ import {
   loadDraft,
   saveDraft,
 } from './draftStorage'
-import { getSupabaseBrowserClient } from './supabaseClient'
-
-/** אירוח ב-github.io: קישור ללקוח – רק דף ציבורי, ללא אדמין */
-function isGithubPagesPublicHost() {
-  if (typeof window === 'undefined') return false
-  return window.location.hostname.endsWith('.github.io')
-}
 
 function baseUrlWithSlash() {
   const b = import.meta.env.BASE_URL
@@ -45,9 +37,7 @@ function normalizedAppPathname(fullPathname: string) {
 }
 
 function resolveIsAdminRoute() {
-  return (
-    !isGithubPagesPublicHost() && normalizedAppPathname(window.location.pathname) === '/admin'
-  )
+  return normalizedAppPathname(window.location.pathname) === '/admin'
 }
 
 function createId() {
@@ -81,36 +71,25 @@ function buildPublicUrl() {
   return `${origin}${base}`
 }
 
-const SUPABASE_LOGIN_HINT =
-  'התחבר כאדמין כדי לשמור בהגדרה המשותפת (מה שמוצג ללקוח בכתובת החיצונית).'
+/** כתובת אדמין באותה סביבה (GitHub Pages / אירוח מקומי). */
+function buildPublicAdminUrl() {
+  const explicit = import.meta.env.VITE_PUBLIC_SITE_URL?.trim()
+  if (explicit) {
+    const base = explicit.replace(/\/$/, '')
+    return `${base}/admin`
+  }
+  const origin = window.location.origin
+  const base = baseUrlWithSlash()
+  return `${origin}${base}admin`
+}
 
 function App() {
   const [draft, setDraft] = useState<LandingDraft>(emptyDraft)
   const [isDraftLoaded, setIsDraftLoaded] = useState(false)
   const [storageError, setStorageError] = useState('')
   const [copied, setCopied] = useState(false)
-  const [session, setSession] = useState<Session | null>(null)
-  const [authEmail, setAuthEmail] = useState('')
-  const [authPassword, setAuthPassword] = useState('')
-  const [authBusy, setAuthBusy] = useState(false)
+  const [copiedAdmin, setCopiedAdmin] = useState(false)
   const isAdminRoute = resolveIsAdminRoute()
-
-  useEffect(() => {
-    const client = getSupabaseBrowserClient()
-    if (!client) return
-
-    void client.auth.getSession().then(({ data }) => {
-      setSession(data.session ?? null)
-    })
-
-    const {
-      data: { subscription },
-    } = client.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
 
   function handleCopyUrl() {
     navigator.clipboard.writeText(buildPublicUrl()).then(() => {
@@ -119,30 +98,11 @@ function App() {
     })
   }
 
-  async function handleAdminSignIn(event: FormEvent) {
-    event.preventDefault()
-    const client = getSupabaseBrowserClient()
-    if (!client) return
-
-    setAuthBusy(true)
-    const { error } = await client.auth.signInWithPassword({
-      email: authEmail.trim(),
-      password: authPassword,
+  function handleCopyAdminUrl() {
+    navigator.clipboard.writeText(buildPublicAdminUrl()).then(() => {
+      setCopiedAdmin(true)
+      setTimeout(() => setCopiedAdmin(false), 2000)
     })
-    setAuthBusy(false)
-
-    if (error) {
-      setStorageError(error.message)
-      return
-    }
-
-    setStorageError('')
-    setAuthPassword('')
-  }
-
-  async function handleAdminSignOut() {
-    await getSupabaseBrowserClient()?.auth.signOut()
-    setStorageError('')
   }
 
   useEffect(() => {
@@ -167,11 +127,10 @@ function App() {
   useEffect(() => {
     if (!isDraftLoaded) return
 
-    if (isSupabaseConfigured() && isAdminRoute && !session) {
-      return
-    }
+    const shouldPersist = !isSupabaseConfigured() || isAdminRoute
+    if (!shouldPersist) return
 
-    saveDraft(draft, session)
+    saveDraft(draft)
       .then(() => setStorageError(''))
       .catch(() => {
         if (!isSupabaseConfigured()) {
@@ -180,7 +139,7 @@ function App() {
           setStorageError('לא ניתן לשמור בהגדרה המשותפת. נסה שוב.')
         }
       })
-  }, [draft, isDraftLoaded, session, isAdminRoute])
+  }, [draft, isDraftLoaded, isAdminRoute])
 
   async function handleHeroUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -249,9 +208,6 @@ function App() {
     })
   }
 
-  const persistLoginReminder =
-    isDraftLoaded && isAdminRoute && isSupabaseConfigured() && !session
-
   if (!isAdminRoute) {
     return <LandingPage draft={draft} />
   }
@@ -261,49 +217,10 @@ function App() {
       <section className="admin-panel" aria-labelledby="admin-title">
         {isSupabaseConfigured() ? (
           <div className="admin-auth-banner">
-            {session ? (
-              <p className="admin-auth-status">
-                מחובר כ־<strong>{session.user.email}</strong>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => void handleAdminSignOut()}
-                >
-                  התנתק
-                </button>
-              </p>
-            ) : (
-              <form className="admin-auth-form" onSubmit={(event) => void handleAdminSignIn(event)}>
-                <p className="admin-auth-intro">
-                  כניסת אדמין לשמירה משותפת — אותן הגדרות בפיתוח ובכתובת GitHub הציבורית.
-                </p>
-                <label className="field-label">
-                  אימייל
-                  <input
-                    required
-                    autoComplete="username"
-                    className="text-field"
-                    type="email"
-                    value={authEmail}
-                    onChange={(event) => setAuthEmail(event.target.value)}
-                  />
-                </label>
-                <label className="field-label">
-                  סיסמה
-                  <input
-                    required
-                    autoComplete="current-password"
-                    className="text-field"
-                    type="password"
-                    value={authPassword}
-                    onChange={(event) => setAuthPassword(event.target.value)}
-                  />
-                </label>
-                <button className="upload-button" disabled={authBusy} type="submit">
-                  {authBusy ? 'מתחבר…' : 'התחבר'}
-                </button>
-              </form>
-            )}
+            <p className="admin-auth-intro">
+              שמירה ל־Supabase (מפתח anon) — מה שאתה עורך באדמין מוצג באותה הגדרה בדף הציבורי
+              (GitHub Pages וכו׳), לאחר פריסה עם אותם משתני סביבה.
+            </p>
           </div>
         ) : (
           <p className="admin-local-hint">
@@ -319,11 +236,17 @@ function App() {
             העלאת תמונת פתיחה ותמונות מבצעים. התמונות אחרי הפתיחה מוצגות אחת
             מתחת לשנייה לפי סדר ההעלאה.
           </p>
-          <a className="preview-link" href={baseUrlWithSlash()} target="_blank" rel="noreferrer">
-            פתיחת הדף הציבורי
-          </a>
-          {storageError || persistLoginReminder ? (
-            <p className="error-message">{storageError || SUPABASE_LOGIN_HINT}</p>
+          <p className="preview-links-inline">
+            <a className="preview-link" href={buildPublicUrl()} target="_blank" rel="noreferrer">
+              פתיחת הדף הציבורי
+            </a>
+            <span className="preview-links-sep"> · </span>
+            <a className="preview-link" href={buildPublicAdminUrl()} target="_blank" rel="noreferrer">
+              כתובת האדמין (להעתקה / לשימוש ב-GitHub Pages)
+            </a>
+          </p>
+          {storageError ? (
+            <p className="error-message">{storageError}</p>
           ) : null}
         </div>
 
@@ -521,16 +444,29 @@ function App() {
           )}
         </section>
 
-        <div className="page-url-bar" dir="rtl">
-          <span className="page-url-label">כתובת הדף הציבורי:</span>
-          <code className="page-url-value">{buildPublicUrl()}</code>
-          <button
-            type="button"
-            className="copy-url-button"
-            onClick={handleCopyUrl}
-          >
-            {copied ? '✓ הועתק' : 'העתק'}
-          </button>
+        <div className="page-url-rows" dir="rtl">
+          <div className="page-url-bar">
+            <span className="page-url-label">כתובת הדף הציבורי:</span>
+            <code className="page-url-value">{buildPublicUrl()}</code>
+            <button
+              type="button"
+              className="copy-url-button"
+              onClick={handleCopyUrl}
+            >
+              {copied ? '✓ הועתק' : 'העתק'}
+            </button>
+          </div>
+          <div className="page-url-bar">
+            <span className="page-url-label">כתובת האדמין (אותה סביבה):</span>
+            <code className="page-url-value">{buildPublicAdminUrl()}</code>
+            <button
+              type="button"
+              className="copy-url-button"
+              onClick={handleCopyAdminUrl}
+            >
+              {copiedAdmin ? '✓ הועתק' : 'העתק'}
+            </button>
+          </div>
         </div>
       </section>
     </main>
