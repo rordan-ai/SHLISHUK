@@ -37,6 +37,45 @@ const emptyDraft: LandingDraft = {
   },
 }
 
+/** אירוח ב-github.io: קישור ללקוח – רק דף ציבורי, ללא אדמין */
+function isGithubPagesPublicHost() {
+  if (typeof window === 'undefined') return false
+  return window.location.hostname.endsWith('.github.io')
+}
+
+function baseUrlWithSlash() {
+  const b = import.meta.env.BASE_URL
+  return b.endsWith('/') ? b : `${b}/`
+}
+
+function normalizedAppPathname(fullPathname: string) {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+  let suffix: string
+
+  if (!base || base === '') {
+    suffix = fullPathname
+  } else if (fullPathname.startsWith(base)) {
+    suffix = fullPathname.slice(base.length) || '/'
+    if (!suffix.startsWith('/')) suffix = `/${suffix}`
+  } else {
+    suffix = fullPathname
+  }
+
+  if (suffix.length > 1 && suffix.endsWith('/')) {
+    suffix = suffix.slice(0, -1)
+  }
+  if (!suffix.startsWith('/')) {
+    suffix = `/${suffix}`
+  }
+  return suffix
+}
+
+function resolveIsAdminRoute() {
+  return (
+    !isGithubPagesPublicHost() && normalizedAppPathname(window.location.pathname) === '/admin'
+  )
+}
+
 function createId() {
   return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
 }
@@ -129,7 +168,9 @@ async function saveDraft(draft: LandingDraft) {
 }
 
 function buildPublicUrl() {
-  return `${window.location.origin}/`
+  const origin = window.location.origin
+  const base = baseUrlWithSlash()
+  return `${origin}${base}`
 }
 
 function App() {
@@ -137,7 +178,7 @@ function App() {
   const [isDraftLoaded, setIsDraftLoaded] = useState(false)
   const [storageError, setStorageError] = useState('')
   const [copied, setCopied] = useState(false)
-  const isAdminRoute = window.location.pathname === '/admin'
+  const isAdminRoute = resolveIsAdminRoute()
 
   function handleCopyUrl() {
     navigator.clipboard.writeText(buildPublicUrl()).then(() => {
@@ -256,7 +297,7 @@ function App() {
             העלאת תמונת פתיחה ותמונות מבצעים. התמונות אחרי הפתיחה מוצגות אחת
             מתחת לשנייה לפי סדר ההעלאה.
           </p>
-          <a className="preview-link" href="/" target="_blank">
+          <a className="preview-link" href={baseUrlWithSlash()} target="_blank" rel="noreferrer">
             פתיחת הדף הציבורי
           </a>
           {storageError ? <p className="error-message">{storageError}</p> : null}
