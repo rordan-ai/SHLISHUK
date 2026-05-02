@@ -1,0 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap');
+
+:root {
+  --accent: #3978f2;
+  --bg: #f4f2ec;
+  --border: #ded7c7;
+  --card-bg: #fffdf8;
+  --focus: rgba(57, 120, 242, 0.35);
+  --panel-bg: #fbfaf6;
+  --panel-shadow: -18px 0 60px rgba(52, 44, 26, 0.08);
+  --page-image-width: min(850px, calc(100vw - 32px));
+  --preview-bg: #fff;
+  --soft-bg: #f0eadc;
+  --text: #605b50;
+  --text-strong: #17140f;
+
+  background: var(--bg);
+  color: var(--text);
+  font: 17px/1.55 'Rubik', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+body {
+  margin: 0;
+}
+
+h1,
+h2 {
+  color: var(--text-strong);
+  line-height: 1.1;
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(32px, 5vw, 52px);
+  font-weight: 950;
+}
+
+h2 {
+  font-size: 20px;
+  font-weight: 900;
+}
+
+p {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
