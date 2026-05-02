@@ -15,6 +15,47 @@
   width: 100%;
 }
 
+.admin-auth-banner {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  margin-bottom: 22px;
+  padding: 18px;
+}
+
+.admin-auth-intro {
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 14px;
+}
+
+.admin-auth-form {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+}
+
+.admin-auth-status {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: space-between;
+  margin: 0;
+}
+
+.admin-local-hint {
+  background: var(--soft-bg);
+  border-radius: 14px;
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  margin: 0 0 22px;
+  padding: 14px 16px;
+}
+
 .panel-heading {
   display: grid;
   gap: 10px;
