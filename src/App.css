@@ -1,3 +1,11 @@
+.admin-suspense-fallback {
+  font-size: 18px;
+  font-weight: 800;
+  margin: 0;
+  padding: 48px 24px;
+  text-align: center;
+}
+
 .admin-page {
   display: flex;
   justify-content: center;
@@ -13,36 +21,6 @@
   max-width: 780px;
   padding: 32px;
   width: 100%;
-}
-
-.admin-auth-banner {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  margin-bottom: 22px;
-  padding: 18px;
-}
-
-.admin-auth-intro {
-  color: var(--text-strong);
-  font-size: 14px;
-  font-weight: 700;
-  margin: 0 0 14px;
-}
-
-.admin-auth-form {
-  display: grid;
-  gap: 12px;
-  max-width: 420px;
-}
-
-.admin-auth-status {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  justify-content: space-between;
-  margin: 0;
 }
 
 .admin-local-hint {
@@ -189,6 +167,85 @@
 .upload-card {
   display: grid;
   gap: 14px;
+}
+
+.upload-preview-block {
+  display: grid;
+  gap: 12px;
+}
+
+.upload-actions-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.admin-save-inline {
+  min-width: 110px;
+}
+
+.admin-thumb-slot {
+  background: var(--soft-bg);
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  margin: 0;
+  padding: 12px;
+}
+
+.admin-thumb {
+  aspect-ratio: 4 / 3;
+  background: #fff;
+  border-radius: 10px;
+  display: block;
+  margin-inline: auto;
+  max-height: 140px;
+  max-width: 220px;
+  object-fit: contain;
+  width: 100%;
+}
+
+.admin-thumb-empty {
+  align-items: center;
+  background: var(--card-bg);
+  border-radius: 10px;
+  color: var(--text);
+  display: flex;
+  font-size: 14px;
+  font-weight: 700;
+  justify-content: center;
+  margin-inline: auto;
+  max-width: 220px;
+  min-height: 100px;
+  padding: 16px;
+  text-align: center;
+}
+
+.admin-thumb-caption {
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 10px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+}
+
+.admin-thumb-caption.is-file {
+  white-space: nowrap;
+}
+
+.admin-thumb-caption:not(.is-file) {
+  line-height: 1.35;
+}
+
+.admin-thumb-status.loaded {
+  color: var(--accent);
+}
+
+.admin-thumb-status.empty {
+  color: var(--text);
+  font-weight: 600;
 }
 
 .field-label {

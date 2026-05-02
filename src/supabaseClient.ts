@@ -1,6 +1,4 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-
-let browserClient: SupabaseClient | null = null
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 function supabaseCredentials() {
   return {
@@ -16,12 +14,19 @@ export function isSupabaseConfigured(): boolean {
   )
 }
 
-export function getSupabaseBrowserClient(): SupabaseClient | null {
-  const { url, anon } = supabaseCredentials()
-  if (!(url && anon)) return null
+/** לקוח Supabase נטען כ־lazy chunk — הקוד בדף הציבורי לא כולל את החבילה בתחילה. */
+let clientPromise: Promise<SupabaseClient> | null = null
 
-  if (!browserClient) {
-    browserClient = createClient(url, anon)
+export function ensureSupabaseClient(): Promise<SupabaseClient> | null {
+  const { url, anon } = supabaseCredentials()
+  if (!(url && anon)) {
+    clientPromise = null
+    return null
   }
-  return browserClient
+  if (!clientPromise) {
+    clientPromise = import('@supabase/supabase-js').then(({ createClient }) =>
+      createClient(url, anon),
+    )
+  }
+  return clientPromise
 }

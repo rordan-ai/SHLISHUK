@@ -1,4 +1,4 @@
-import { getSupabaseBrowserClient, isSupabaseConfigured } from './supabaseClient'
+import { ensureSupabaseClient, isSupabaseConfigured } from './supabaseClient'
 import type { LandingDraft } from './draftTypes'
 
 export { isSupabaseConfigured }
@@ -92,24 +92,52 @@ async function saveDraftToIndexedDb(draft: LandingDraft) {
   db.close()
 }
 
-async function loadDraftFromSupabase(): Promise<LandingDraft> {
-  const client = getSupabaseBrowserClient()
-  if (!client) return loadDraftFromIndexedDb()
+/**
+ * משיכת payload ישירות מ‑PostgREST של Supabase ללא הספרייה (חוסך chunk גדול
+ * שמשפיע על הטעינה הראשונית של הדף הציבורי). אם startPublicDraftPrefetch כבר
+ * התחיל בקשה — נשתמש בה במקום להפעיל בקשה חדשה.
+ */
+async function loadDraftFromSupabaseRest(): Promise<LandingDraft> {
+  const url = import.meta.env.VITE_SUPABASE_URL?.trim() ?? ''
+  const anon = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? ''
+  if (!url || !anon) return loadDraftFromIndexedDb()
 
-  const { data, error } = await client
-    .from('shlishuk_draft')
-    .select('payload')
-    .eq('id', REMOTE_ROW_ID)
-    .maybeSingle()
+  const inflight =
+    typeof window !== 'undefined' ? window.__shlishukDraftRequest : undefined
 
-  if (error) throw error
-  if (!data?.payload) return emptyDraft
-  return normalizeDraft(data.payload as Partial<LandingDraft>)
+  if (inflight) {
+    const draft = await inflight
+    if (draft) return draft
+  }
+
+  const endpoint = `${url.replace(/\/$/, '')}/rest/v1/shlishuk_draft?select=payload&id=eq.${encodeURIComponent(
+    REMOTE_ROW_ID,
+  )}`
+
+  const response = await fetch(endpoint, {
+    headers: {
+      apikey: anon,
+      Authorization: `Bearer ${anon}`,
+      Accept: 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`Supabase REST error ${response.status}`)
+  }
+
+  const rows: Array<{ payload: Partial<LandingDraft> | null }> =
+    await response.json()
+  const payload = rows[0]?.payload
+  if (!payload) return emptyDraft
+  return normalizeDraft(payload)
 }
 
 async function saveDraftToSupabase(draft: LandingDraft) {
-  const client = getSupabaseBrowserClient()
-  if (!client) throw new Error('Supabase not configured')
+  const clientAwaited = ensureSupabaseClient()
+  if (!clientAwaited) throw new Error('Supabase not configured')
+
+  const client = await clientAwaited
 
   const { error } = await client.from('shlishuk_draft').upsert(
     {
@@ -123,16 +151,28 @@ async function saveDraftToSupabase(draft: LandingDraft) {
   if (error) throw error
 }
 
-export async function loadDraft(): Promise<LandingDraft> {
-  if (isSupabaseConfigured()) {
-    return loadDraftFromSupabase()
-  }
+/** תצוגה מיידית מ‑IndexedDB (אחרי שמירה כפולה זה מקורב לענן). */
+export async function loadDraftFromBrowserCache(): Promise<LandingDraft> {
   return loadDraftFromIndexedDb()
 }
 
+/** משיכה מהענן (REST ישיר). */
+export async function loadDraftFromCloud(): Promise<LandingDraft> {
+  return loadDraftFromSupabaseRest()
+}
+
+export async function persistDraftLocally(draft: LandingDraft): Promise<void> {
+  await saveDraftToIndexedDb(draft)
+}
+
+/** זיכרון דפדפן תמיד, וגם הענן אם מוגדר. */
 export async function saveDraft(draft: LandingDraft) {
-  if (isSupabaseConfigured()) {
-    return saveDraftToSupabase(draft)
+  try {
+    await saveDraftToIndexedDb(draft)
+  } catch {
+    /* לא חוסם שמירה בענן */
   }
-  return saveDraftToIndexedDb(draft)
+  if (isSupabaseConfigured()) {
+    await saveDraftToSupabase(draft)
+  }
 }
