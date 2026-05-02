@@ -86,12 +86,13 @@ if (!(supUrl && supAnon)) {
 
 ghSecretSet('VITE_SUPABASE_URL', supUrl)
 ghSecretSet('VITE_SUPABASE_ANON_KEY', supAnon)
-ghSecretSet(
-  'VERIFY_PAGES_URL',
-  pagesBase.replace(/\/$/, ''),
-)
 ghSecretSet('VITE_PUBLIC_SITE_URL', pagesBase)
 
 console.log('✓ Secrets עודכנו לריפו', repoSlug)
 console.log('  דף ציבורי:', pagesBase)
 console.log('  אדמין:', `${pagesBase.replace(/\/$/, '')}/admin`)
+console.log(
+  '',
+  'לאחר פריסה: אימות מול האתר החי (אופציונלי):\n',
+  `  $env:VERIFY_PAGES_URL='${pagesBase.replace(/\/$/, '')}'; npm run verify:pages`,
+)
