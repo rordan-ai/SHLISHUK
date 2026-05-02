@@ -72,6 +72,10 @@ function readImage(file: File): Promise<UploadedImage> {
 }
 
 function buildPublicUrl() {
+  const explicit = import.meta.env.VITE_PUBLIC_SITE_URL?.trim()
+  if (explicit) {
+    return explicit.endsWith('/') ? explicit : `${explicit}/`
+  }
   const origin = window.location.origin
   const base = baseUrlWithSlash()
   return `${origin}${base}`

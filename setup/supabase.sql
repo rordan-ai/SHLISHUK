@@ -1,5 +1,5 @@
 -- הרץ בלשונית SQL ב-Supabase לאחר יצירת פרויקט.
--- Authentication: הפעל Email / Password בAuthentication → Providers.
+-- Authentication → Providers: הפעל Email וסיסמה.
 
 create table if not exists public.shlishuk_draft (
   id text primary key,
@@ -33,3 +33,4 @@ values ('default', '{"title":"","logoImage":null,"heroImage":null,"secondaryImag
 on conflict (id) do nothing;
 
 -- משתמש אדמין: Authentication → Users → Add user (או הרשמה מותרת מאותו מסך).
+-- אם ההתחברות נכשלת מהדפדפן המקומי: Authentication → URL configuration → להוסיף ל־Redirect URLs את http://localhost:5173 ובמידת הצורך http://localhost:5173/admin
