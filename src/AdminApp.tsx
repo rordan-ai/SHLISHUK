@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
   type ChangeEvent,
   type Dispatch,
@@ -13,6 +14,21 @@ import {
   uploadImage,
   uploadImages,
 } from './imageUpload'
+
+const AUTOSAVE_DEBOUNCE_MS = 350
+const SAVE_TIMEOUT_MS = 12000
+
+function saveDraftWithTimeout(draft: LandingDraft) {
+  return Promise.race([
+    saveDraft(draft),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error('שמירה לקחה יותר מדי. נסה שוב.')),
+        SAVE_TIMEOUT_MS,
+      ),
+    ),
+  ])
+}
 
 type AdminAppProps = {
   draft: LandingDraft
@@ -125,15 +141,37 @@ export default function AdminApp({
   const [saveFeedbackSlot, setSaveFeedbackSlot] = useState<PreviewSlotId | null>(
     null,
   )
+  const draftRef = useRef(draft)
+  const autosaveTimerRef = useRef<number | null>(null)
+  const inFlightSaveRef = useRef<Promise<unknown> | null>(null)
 
-  async function persistNow(slot: PreviewSlotId) {
-    setSaveBusy(true)
-    setSaveFeedbackSlot(null)
-    setStorageError('')
+  useEffect(() => {
+    draftRef.current = draft
+  }, [draft])
+
+  function clearAutosaveTimer() {
+    if (autosaveTimerRef.current != null) {
+      window.clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+  }
+
+  async function flushSave(): Promise<void> {
+    clearAutosaveTimer()
+    while (inFlightSaveRef.current) {
+      try {
+        await inFlightSaveRef.current
+      } catch {
+        /* נספר את השגיאה למטה */
+      }
+      if (inFlightSaveRef.current === null) break
+    }
+    const snapshot = draftRef.current
+    const promise = saveDraftWithTimeout(snapshot)
+    inFlightSaveRef.current = promise
     try {
-      await saveDraft(draft)
-      setSaveFeedbackSlot(slot)
-      window.setTimeout(() => setSaveFeedbackSlot(null), 2000)
+      await promise
+      setStorageError('')
     } catch {
       if (!isSupabaseConfigured()) {
         setStorageError(
@@ -142,6 +180,24 @@ export default function AdminApp({
       } else {
         setStorageError('לא ניתן לשמור בהגדרה המשותפת. נסה שוב.')
       }
+      throw new Error('save_failed')
+    } finally {
+      if (inFlightSaveRef.current === promise) {
+        inFlightSaveRef.current = null
+      }
+    }
+  }
+
+  async function persistNow(slot: PreviewSlotId) {
+    if (saveBusy) return
+    setSaveBusy(true)
+    setSaveFeedbackSlot(null)
+    try {
+      await flushSave()
+      setSaveFeedbackSlot(slot)
+      window.setTimeout(() => setSaveFeedbackSlot(null), 2000)
+    } catch {
+      /* flushSave כבר עידכן storageError */
     } finally {
       setSaveBusy(false)
     }
@@ -150,18 +206,17 @@ export default function AdminApp({
   useEffect(() => {
     if (!isDraftLoaded || deferRemotePersist) return
 
-    saveDraft(draft)
-      .then(() => setStorageError(''))
-      .catch(() => {
-        if (!isSupabaseConfigured()) {
-          setStorageError(
-            'לא ניתן לשמור את התמונות בדפדפן. נסה תמונות קלות יותר.',
-          )
-        } else {
-          setStorageError('לא ניתן לשמור בהגדרה המשותפת. נסה שוב.')
-        }
+    clearAutosaveTimer()
+    autosaveTimerRef.current = window.setTimeout(() => {
+      autosaveTimerRef.current = null
+      void flushSave().catch(() => {
+        /* flushSave already set storageError */
       })
-  }, [draft, isDraftLoaded, deferRemotePersist, setStorageError])
+    }, AUTOSAVE_DEBOUNCE_MS)
+
+    return () => clearAutosaveTimer()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft, isDraftLoaded, deferRemotePersist])
 
   function handleCopyUrl() {
     navigator.clipboard.writeText(buildPublicUrl()).then(() => {
@@ -193,17 +248,14 @@ export default function AdminApp({
       return
     }
 
-    let previousImage: UploadedImage | null = null
-    setDraft((currentDraft) => {
-      previousImage = currentDraft[field]
-      return { ...currentDraft, [field]: image } as LandingDraft
-    })
+    const prevImage = draftRef.current[field]
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      [field]: image,
+    } as LandingDraft))
     event.target.value = ''
 
-    void deleteUploadedImage(previousImage)
-    void saveDraft({ ...draft, [field]: image } as LandingDraft).catch(() => {
-      /* persist רגיל יתפוס שמירה רגילה ב-effect */
-    })
+    void deleteUploadedImage(prevImage)
   }
 
   async function handleHeroUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -240,23 +292,21 @@ export default function AdminApp({
   }
 
   function removeOfferImage(id: string) {
-    let removed: UploadedImage | null = null
-    setDraft((currentDraft) => {
-      removed = currentDraft.offerImages.find((img) => img.id === id) ?? null
-      return {
-        ...currentDraft,
-        offerImages: currentDraft.offerImages.filter((image) => image.id !== id),
-      }
-    })
+    const removed =
+      draftRef.current.offerImages.find((img) => img.id === id) ?? null
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      offerImages: currentDraft.offerImages.filter((image) => image.id !== id),
+    }))
     void deleteUploadedImage(removed)
   }
 
   function clearSlot(field: 'heroImage' | 'logoImage' | 'secondaryImage') {
-    let removed: UploadedImage | null = null
-    setDraft((currentDraft) => {
-      removed = currentDraft[field]
-      return { ...currentDraft, [field]: null } as LandingDraft
-    })
+    const removed = draftRef.current[field]
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      [field]: null,
+    } as LandingDraft))
     void deleteUploadedImage(removed)
   }
 
