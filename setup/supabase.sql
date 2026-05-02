@@ -49,3 +49,37 @@ on conflict (id) do nothing;
 
 -- משתמש אדמין: Authentication → Users → Add user (או הרשמה מותרת מאותו מסך).
 -- אם ההתחברות נכשלת מהדפדפן המקומי: Authentication → URL configuration → להוסיף ל־Redirect URLs את http://localhost:5173 ובמידת הצורך http://localhost:5173/admin
+
+-- ────────────────────────────────────────────────────────────────
+-- Storage: bucket ציבורי לתמונות הדף (קל ומהיר במקום base64 ב-payload)
+-- ────────────────────────────────────────────────────────────────
+insert into storage.buckets (id, name, public)
+values ('shlishuk-images', 'shlishuk-images', true)
+on conflict (id) do update set public = true;
+
+-- מאפשר ל-anon להעלות/לעדכן/למחוק קבצים בתוך הbucket הזה בלבד.
+-- מתאים לדף מבצעים פנימי; אין שמות אובייקט קבועים אז אין הגנת RLS לפי id.
+drop policy if exists "shlishuk_images_anon_select" on storage.objects;
+create policy "shlishuk_images_anon_select"
+on storage.objects for select
+to anon, authenticated
+using (bucket_id = 'shlishuk-images');
+
+drop policy if exists "shlishuk_images_anon_insert" on storage.objects;
+create policy "shlishuk_images_anon_insert"
+on storage.objects for insert
+to anon, authenticated
+with check (bucket_id = 'shlishuk-images');
+
+drop policy if exists "shlishuk_images_anon_update" on storage.objects;
+create policy "shlishuk_images_anon_update"
+on storage.objects for update
+to anon, authenticated
+using (bucket_id = 'shlishuk-images')
+with check (bucket_id = 'shlishuk-images');
+
+drop policy if exists "shlishuk_images_anon_delete" on storage.objects;
+create policy "shlishuk_images_anon_delete"
+on storage.objects for delete
+to anon, authenticated
+using (bucket_id = 'shlishuk-images');

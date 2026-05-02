@@ -111,6 +111,7 @@ export const LandingPage = memo(function LandingPage({
             alt="תמונה ראשית של דף המבצעים"
             fetchPriority="high"
             decoding="async"
+            sizes="(max-width: 900px) 100vw, 850px"
           />
         ) : (
           <div className="hero-placeholder">תמונה ראשית תופיע כאן</div>
@@ -123,17 +124,20 @@ export const LandingPage = memo(function LandingPage({
             alt="תמונה משנית של דף המבצעים"
             loading="lazy"
             decoding="async"
+            sizes="(max-width: 900px) 100vw, 850px"
           />
         ) : null}
 
         <div className="offer-stack">
-          {draft.offerImages.map((image) => (
+          {draft.offerImages.map((image, index) => (
             <img
               key={image.id}
               src={image.src}
               alt=""
-              loading="lazy"
+              loading={index < 1 ? 'eager' : 'lazy'}
               decoding="async"
+              fetchPriority={index === 0 ? 'high' : 'auto'}
+              sizes="(max-width: 900px) 100vw, 850px"
             />
           ))}
         </div>

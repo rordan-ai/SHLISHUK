@@ -8,27 +8,11 @@ import {
 
 import type { LandingDraft, UploadedImage } from './draftTypes'
 import { isSupabaseConfigured, saveDraft } from './draftStorage'
-
-function createId() {
-  return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
-}
-
-function readImage(file: File): Promise<UploadedImage> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-
-    reader.onload = () => {
-      resolve({
-        id: createId(),
-        name: file.name,
-        src: String(reader.result),
-      })
-    }
-
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(file)
-  })
-}
+import {
+  deleteUploadedImage,
+  uploadImage,
+  uploadImages,
+} from './imageUpload'
 
 type AdminAppProps = {
   draft: LandingDraft
@@ -193,31 +177,45 @@ export default function AdminApp({
     })
   }
 
-  async function handleHeroUpload(event: ChangeEvent<HTMLInputElement>) {
+  async function handleSlotUpload(
+    event: ChangeEvent<HTMLInputElement>,
+    field: 'heroImage' | 'logoImage' | 'secondaryImage',
+  ) {
     const file = event.target.files?.[0]
     if (!file) return
+    setStorageError('')
+    let image: UploadedImage
+    try {
+      image = await uploadImage(file)
+    } catch {
+      setStorageError('העלאת התמונה נכשלה. נסה תמונה קלה יותר.')
+      event.target.value = ''
+      return
+    }
 
-    const image = await readImage(file)
-    setDraft((currentDraft) => ({ ...currentDraft, heroImage: image }))
+    let previousImage: UploadedImage | null = null
+    setDraft((currentDraft) => {
+      previousImage = currentDraft[field]
+      return { ...currentDraft, [field]: image } as LandingDraft
+    })
     event.target.value = ''
+
+    void deleteUploadedImage(previousImage)
+    void saveDraft({ ...draft, [field]: image } as LandingDraft).catch(() => {
+      /* persist רגיל יתפוס שמירה רגילה ב-effect */
+    })
+  }
+
+  async function handleHeroUpload(event: ChangeEvent<HTMLInputElement>) {
+    return handleSlotUpload(event, 'heroImage')
   }
 
   async function handleLogoUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    const image = await readImage(file)
-    setDraft((currentDraft) => ({ ...currentDraft, logoImage: image }))
-    event.target.value = ''
+    return handleSlotUpload(event, 'logoImage')
   }
 
   async function handleSecondaryUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    const image = await readImage(file)
-    setDraft((currentDraft) => ({ ...currentDraft, secondaryImage: image }))
-    event.target.value = ''
+    return handleSlotUpload(event, 'secondaryImage')
   }
 
   async function handleOfferUpload(event: ChangeEvent<HTMLInputElement>) {
@@ -225,8 +223,15 @@ export default function AdminApp({
       firstFile.name.localeCompare(nextFile.name, 'he', { numeric: true }),
     )
     if (files.length === 0) return
-
-    const images = await Promise.all(files.map(readImage))
+    setStorageError('')
+    let images: UploadedImage[]
+    try {
+      images = await uploadImages(files)
+    } catch {
+      setStorageError('העלאת התמונה נכשלה. נסה תמונה קלה יותר.')
+      event.target.value = ''
+      return
+    }
     setDraft((currentDraft) => ({
       ...currentDraft,
       offerImages: [...currentDraft.offerImages, ...images],
@@ -235,10 +240,24 @@ export default function AdminApp({
   }
 
   function removeOfferImage(id: string) {
-    setDraft((currentDraft) => ({
-      ...currentDraft,
-      offerImages: currentDraft.offerImages.filter((image) => image.id !== id),
-    }))
+    let removed: UploadedImage | null = null
+    setDraft((currentDraft) => {
+      removed = currentDraft.offerImages.find((img) => img.id === id) ?? null
+      return {
+        ...currentDraft,
+        offerImages: currentDraft.offerImages.filter((image) => image.id !== id),
+      }
+    })
+    void deleteUploadedImage(removed)
+  }
+
+  function clearSlot(field: 'heroImage' | 'logoImage' | 'secondaryImage') {
+    let removed: UploadedImage | null = null
+    setDraft((currentDraft) => {
+      removed = currentDraft[field]
+      return { ...currentDraft, [field]: null } as LandingDraft
+    })
+    void deleteUploadedImage(removed)
   }
 
   function moveOfferImage(id: string, direction: -1 | 1) {
@@ -332,12 +351,7 @@ export default function AdminApp({
               uploadLabel="העלאת לוגו"
               image={draft.logoImage}
               onFileChange={handleLogoUpload}
-              onRemove={() =>
-                setDraft((currentDraft) => ({
-                  ...currentDraft,
-                  logoImage: null,
-                }))
-              }
+              onRemove={() => clearSlot('logoImage')}
               removeLabel="הסר לוגו"
               saveBusy={saveBusy}
               saveFeedbackSlot={saveFeedbackSlot}
@@ -399,12 +413,7 @@ export default function AdminApp({
               uploadLabel="העלאת תמונה ראשית"
               image={draft.heroImage}
               onFileChange={handleHeroUpload}
-              onRemove={() =>
-                setDraft((currentDraft) => ({
-                  ...currentDraft,
-                  heroImage: null,
-                }))
-              }
+              onRemove={() => clearSlot('heroImage')}
               removeLabel="הסר תמונה ראשית"
               saveBusy={saveBusy}
               saveFeedbackSlot={saveFeedbackSlot}
@@ -426,12 +435,7 @@ export default function AdminApp({
               uploadLabel="העלאת תמונה משנית"
               image={draft.secondaryImage}
               onFileChange={handleSecondaryUpload}
-              onRemove={() =>
-                setDraft((currentDraft) => ({
-                  ...currentDraft,
-                  secondaryImage: null,
-                }))
-              }
+              onRemove={() => clearSlot('secondaryImage')}
               removeLabel="הסר תמונה משנית"
               saveBusy={saveBusy}
               saveFeedbackSlot={saveFeedbackSlot}

@@ -33,6 +33,29 @@ function injectPreconnect(host: string) {
   head.appendChild(link)
 }
 
+function preloadImage(src: string) {
+  if (typeof document === 'undefined') return
+  if (!src || !src.startsWith('http')) return
+  const head = document.head
+  if (!head) return
+  if (head.querySelector(`link[rel="preload"][href="${src}"]`)) return
+  const link = document.createElement('link')
+  link.rel = 'preload'
+  link.as = 'image'
+  link.href = src
+  link.fetchPriority = 'high'
+  head.appendChild(link)
+}
+
+function isAdminPath() {
+  if (typeof window === 'undefined') return false
+  const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '')
+  let suffix = window.location.pathname
+  if (base && suffix.startsWith(base)) suffix = suffix.slice(base.length) || '/'
+  if (!suffix.startsWith('/')) suffix = `/${suffix}`
+  return suffix === '/admin' || suffix === '/admin/'
+}
+
 export function startPublicDraftPrefetch() {
   if (typeof window === 'undefined') return
   if (window.__shlishukDraftRequest) return
@@ -63,7 +86,12 @@ export function startPublicDraftPrefetch() {
     })
     .then((rows) => {
       const payload = rows[0]?.payload
-      return payload ? normalizeDraft(payload) : null
+      const draft = payload ? normalizeDraft(payload) : null
+      if (draft && !isAdminPath()) {
+        if (draft.heroImage?.src) preloadImage(draft.heroImage.src)
+        if (draft.logoImage?.src) preloadImage(draft.logoImage.src)
+      }
+      return draft
     })
     .catch(() => null)
 }
