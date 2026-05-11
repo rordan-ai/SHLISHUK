@@ -42,6 +42,10 @@ type AdminAppProps = {
   buildPublicUrl: () => string
   buildPublicAdminUrl: () => string
   buildAdminDashboardUrl: () => string
+  /** אם הסניף משני: קישורי הרשתות מנוהלים בסניף הראשי ומועברים לכאן לתצוגה בלבד. */
+  sharedSocialLinks: LandingDraft['socialLinks'] | null
+  /** קישור לעריכה בסניף הראשי, מוצג עם הודעה לאדמין. */
+  mainBranchAdminUrl: string
 }
 
 type PreviewSlotId = 'logo' | 'hero' | 'secondary'
@@ -139,7 +143,11 @@ export default function AdminApp({
   buildPublicUrl,
   buildPublicAdminUrl,
   buildAdminDashboardUrl,
+  sharedSocialLinks,
+  mainBranchAdminUrl,
 }: AdminAppProps) {
+  const socialLinksReadOnly = sharedSocialLinks !== null
+  const displayedSocialLinks = sharedSocialLinks ?? draft.socialLinks
   const [copied, setCopied] = useState(false)
   const [copiedAdmin, setCopiedAdmin] = useState(false)
   const [saveBusy, setSaveBusy] = useState(false)
@@ -422,15 +430,28 @@ export default function AdminApp({
           <section className="upload-card" aria-labelledby="social-links-title">
             <div>
               <h2 id="social-links-title">רשתות חברתיות</h2>
-              <p>קישורים שיופיעו בראש הדף.</p>
+              {socialLinksReadOnly ? (
+                <p>
+                  קישורי הרשתות חברתיות משותפים לכל הסניפים.{' '}
+                  <a
+                    className="branch-back-link"
+                    href={mainBranchAdminUrl}
+                  >
+                    עריכה בסניף הראשי
+                  </a>
+                </p>
+              ) : (
+                <p>קישורים שיופיעו בראש הדף.</p>
+              )}
             </div>
             <label className="field-label">
               פייסבוק
               <input
                 className="text-field"
                 type="url"
-                value={draft.socialLinks.facebook}
-                onChange={(event) =>
+                value={displayedSocialLinks.facebook}
+                onChange={(event) => {
+                  if (socialLinksReadOnly) return
                   setDraft((currentDraft) => ({
                     ...currentDraft,
                     socialLinks: {
@@ -438,8 +459,10 @@ export default function AdminApp({
                       facebook: event.target.value,
                     },
                   }))
-                }
+                }}
                 placeholder="https://facebook.com/..."
+                readOnly={socialLinksReadOnly}
+                disabled={socialLinksReadOnly}
               />
             </label>
             <label className="field-label">
@@ -447,8 +470,9 @@ export default function AdminApp({
               <input
                 className="text-field"
                 type="url"
-                value={draft.socialLinks.instagram}
-                onChange={(event) =>
+                value={displayedSocialLinks.instagram}
+                onChange={(event) => {
+                  if (socialLinksReadOnly) return
                   setDraft((currentDraft) => ({
                     ...currentDraft,
                     socialLinks: {
@@ -456,8 +480,10 @@ export default function AdminApp({
                       instagram: event.target.value,
                     },
                   }))
-                }
+                }}
                 placeholder="https://instagram.com/..."
+                readOnly={socialLinksReadOnly}
+                disabled={socialLinksReadOnly}
               />
             </label>
           </section>

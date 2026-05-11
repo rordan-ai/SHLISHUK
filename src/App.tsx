@@ -140,10 +140,16 @@ function App() {
   const [draft, setDraft] = useState<LandingDraft>(emptyDraft)
   const [isDraftLoaded, setIsDraftLoaded] = useState(false)
   const [storageError, setStorageError] = useState('')
+  const [sharedSocialLinks, setSharedSocialLinks] = useState<
+    LandingDraft['socialLinks'] | null
+  >(null)
 
   const branchForData =
     route.kind === 'public' || route.kind === 'admin-branch' ? route.branch : null
   const isAdminBranchRoute = route.kind === 'admin-branch'
+  const isSecondaryBranch =
+    branchForData != null && branchForData.rowId !== DEFAULT_BRANCH.rowId
+  const effectiveSharedSocialLinks = isSecondaryBranch ? sharedSocialLinks : null
   const [deferRemotePersist, setDeferRemotePersist] = useState(
     () => isAdminBranchRoute && isSupabaseConfigured(),
   )
@@ -202,6 +208,40 @@ function App() {
     }
   }, [branchForData, isAdminBranchRoute])
 
+  /**
+   * סניפים משניים יורשים socialLinks מסניף הראשי (default). אנו טוענים את ה-default
+   * תמיד כשלסניף הנוכחי יש rowId שונה — גם לתצוגה ציבורית וגם לתצוגה ב-admin.
+   */
+  useEffect(() => {
+    if (!isSecondaryBranch) return
+    let cancel = false
+    ;(async () => {
+      try {
+        if (isSupabaseConfigured()) {
+          try {
+            const cached = await loadDraftFromBrowserCache(DEFAULT_BRANCH.rowId)
+            if (!cancel && cached) setSharedSocialLinks(cached.socialLinks)
+          } catch {
+            /* ignore */
+          }
+          const remote = await loadDraftFromCloud(DEFAULT_BRANCH.rowId)
+          if (!cancel) {
+            await persistDraftLocally(remote, DEFAULT_BRANCH.rowId)
+            setSharedSocialLinks(remote.socialLinks)
+          }
+        } else {
+          const local = await loadDraftFromBrowserCache(DEFAULT_BRANCH.rowId)
+          if (!cancel) setSharedSocialLinks(local.socialLinks)
+        }
+      } catch {
+        /* אם default לא נטען מהענן, נמשיך עם מה שיש בdraft של הסניף */
+      }
+    })()
+    return () => {
+      cancel = true
+    }
+  }, [isSecondaryBranch])
+
   useEffect(() => {
     if (route.kind !== 'public' || !isSupabaseConfigured()) return
 
@@ -221,7 +261,11 @@ function App() {
   }, [route.kind])
 
   if (route.kind === 'public') {
-    return <LandingPage draft={draft} />
+    const effectiveDraft: LandingDraft =
+      effectiveSharedSocialLinks
+        ? { ...draft, socialLinks: effectiveSharedSocialLinks }
+        : draft
+    return <LandingPage draft={effectiveDraft} />
   }
 
   if (route.kind === 'admin-dashboard') {
@@ -237,6 +281,7 @@ function App() {
 
   if (route.kind === 'admin-branch') {
     const branch = route.branch
+    const isSecondary = branch.rowId !== DEFAULT_BRANCH.rowId
     return (
       <Suspense fallback={<AdminFallback />}>
         <AdminApp
@@ -250,6 +295,8 @@ function App() {
           buildPublicUrl={() => buildPublicUrlForBranch(branch)}
           buildPublicAdminUrl={() => buildAdminUrlForBranch(branch)}
           buildAdminDashboardUrl={buildAdminDashboardUrl}
+          sharedSocialLinks={isSecondary ? effectiveSharedSocialLinks : null}
+          mainBranchAdminUrl={buildAdminUrlForBranch(DEFAULT_BRANCH)}
         />
       </Suspense>
     )
