@@ -152,7 +152,8 @@ export async function uploadImage(
     upsert: false,
   })
   if (error) {
-    return readImageAsDataUrl(file, id)
+    // ב-Supabase מוגדר: לעולם לא נופלים ל-base64 (זה גורם ל-payload ענק שלא ניתן לשמור).
+    throw new Error(`Storage upload failed: ${error.message}`)
   }
 
   return {
@@ -190,6 +191,7 @@ export async function deleteUploadedImage(image: UploadedImage | null) {
   }
 }
 
+/** רק לסביבת dev ללא Supabase — לעולם לא בפרודקשן עם Supabase מוגדר. */
 function readImageAsDataUrl(file: File, id: string): Promise<UploadedImage> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
