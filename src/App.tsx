@@ -17,8 +17,15 @@ import {
   persistDraftLocally,
 } from './draftStorage'
 import { ensureSupabaseClient } from './supabaseClient'
+import {
+  BRANCHES,
+  DEFAULT_BRANCH,
+  findBranchBySlug,
+  type BranchConfig,
+} from './branches'
 
 const AdminApp = lazy(() => import('./AdminApp'))
+const AdminDashboard = lazy(() => import('./AdminDashboard'))
 
 function baseUrlWithSlash() {
   const b = import.meta.env.BASE_URL
@@ -47,11 +54,33 @@ function normalizedAppPathname(fullPathname: string) {
   return suffix
 }
 
-function resolveIsAdminRoute() {
-  return normalizedAppPathname(window.location.pathname) === '/admin'
+type Route =
+  | { kind: 'public'; branch: BranchConfig }
+  | { kind: 'admin-dashboard' }
+  | { kind: 'admin-branch'; branch: BranchConfig }
+  | { kind: 'not-found' }
+
+function resolveRoute(): Route {
+  if (typeof window === 'undefined') {
+    return { kind: 'public', branch: DEFAULT_BRANCH }
+  }
+  const suffix = normalizedAppPathname(window.location.pathname)
+
+  if (suffix === '/admin') return { kind: 'admin-dashboard' }
+  if (suffix.startsWith('/admin/')) {
+    const slug = suffix.slice('/admin/'.length)
+    const branch = findBranchBySlug(slug)
+    return branch ? { kind: 'admin-branch', branch } : { kind: 'not-found' }
+  }
+  if (suffix === '/' || suffix === '') {
+    return { kind: 'public', branch: DEFAULT_BRANCH }
+  }
+  const slug = suffix.replace(/^\/+/, '')
+  const branch = findBranchBySlug(slug)
+  return branch ? { kind: 'public', branch } : { kind: 'not-found' }
 }
 
-function buildPublicUrl() {
+function siteRoot() {
   const explicit = import.meta.env.VITE_PUBLIC_SITE_URL?.trim()
   if (explicit) {
     return explicit.endsWith('/') ? explicit : `${explicit}/`
@@ -61,61 +90,104 @@ function buildPublicUrl() {
   return `${origin}${base}`
 }
 
-function buildPublicAdminUrl() {
-  const explicit = import.meta.env.VITE_PUBLIC_SITE_URL?.trim()
-  if (explicit) {
-    const base = explicit.replace(/\/$/, '')
-    return `${base}/admin`
-  }
-  const origin = window.location.origin
-  const base = baseUrlWithSlash()
-  return `${origin}${base}admin`
+function buildPublicUrlForBranch(branch: BranchConfig) {
+  const root = siteRoot()
+  if (!branch.slug) return root
+  return `${root}${branch.slug}`
+}
+
+function buildAdminUrlForBranch(branch: BranchConfig) {
+  const root = siteRoot().replace(/\/$/, '')
+  return `${root}/admin/${branch.slug || branch.rowId}`
+}
+
+function buildAdminDashboardUrl() {
+  const root = siteRoot().replace(/\/$/, '')
+  return `${root}/admin`
 }
 
 function AdminFallback() {
   return (
     <main className="admin-page" dir="rtl">
-      <p className="admin-suspense-fallback">טוען אדמין…</p>
+      <p className="admin-suspense-fallback">טוען…</p>
+    </main>
+  )
+}
+
+function NotFoundPage() {
+  return (
+    <main className="admin-page" dir="rtl">
+      <section className="admin-panel">
+        <div className="panel-heading">
+          <p className="eyebrow">SHLISHUK</p>
+          <h1>הדף לא נמצא</h1>
+          <p>הכתובת אינה מוכרת. רשימת הסניפים:</p>
+          <ul>
+            {BRANCHES.map((b) => (
+              <li key={b.rowId}>
+                <a href={buildPublicUrlForBranch(b)}>{b.label}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
     </main>
   )
 }
 
 function App() {
-  const isAdminRoute = resolveIsAdminRoute()
+  const [route, setRoute] = useState<Route>(() => resolveRoute())
   const [draft, setDraft] = useState<LandingDraft>(emptyDraft)
   const [isDraftLoaded, setIsDraftLoaded] = useState(false)
   const [storageError, setStorageError] = useState('')
+
+  const branchForData =
+    route.kind === 'public' || route.kind === 'admin-branch' ? route.branch : null
+  const isAdminBranchRoute = route.kind === 'admin-branch'
   const [deferRemotePersist, setDeferRemotePersist] = useState(
-    () => isAdminRoute && isSupabaseConfigured(),
+    () => isAdminBranchRoute && isSupabaseConfigured(),
   )
 
-  useLayoutEffect(() => {
-    let cancel = false
+  useEffect(() => {
+    function onPopState() {
+      setRoute(resolveRoute())
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
 
+  useLayoutEffect(() => {
+    if (!branchForData) return
+    let cancel = false
+    const rowId = branchForData.rowId
     ;(async () => {
+      setDraft(emptyDraft)
+      setIsDraftLoaded(false)
+      setDeferRemotePersist(isAdminBranchRoute && isSupabaseConfigured())
+
       if (isSupabaseConfigured()) {
         try {
-          const cached = await loadDraftFromBrowserCache()
+          const cached = await loadDraftFromBrowserCache(rowId)
           if (!cancel) setDraft(cached)
         } catch {
           /* ממשיכים למשיכת ענן */
         }
 
         try {
-          const remote = await loadDraftFromCloud()
+          const remote = await loadDraftFromCloud(rowId)
           if (!cancel) {
-            await persistDraftLocally(remote)
+            await persistDraftLocally(remote, rowId)
             setDraft(remote)
           }
         } catch {
-          if (!cancel && isAdminRoute) {
+          if (!cancel && isAdminBranchRoute) {
             setStorageError(
               'לא ניתן לטעון מהענן. מוצגים נתונים מהדפדפן כשיש.',
             )
           }
         }
       } else {
-        const local = await loadDraftFromBrowserCache()
+        const local = await loadDraftFromBrowserCache(rowId)
         if (!cancel) setDraft(local)
       }
 
@@ -128,10 +200,10 @@ function App() {
     return () => {
       cancel = true
     }
-  }, [isAdminRoute])
+  }, [branchForData, isAdminBranchRoute])
 
   useEffect(() => {
-    if (isAdminRoute || !isSupabaseConfigured()) return
+    if (route.kind !== 'public' || !isSupabaseConfigured()) return
 
     let idleHandle = 0
 
@@ -146,26 +218,44 @@ function App() {
 
     const t = window.setTimeout(warmSupabaseChunk, 1)
     return () => window.clearTimeout(t)
-  }, [isAdminRoute])
+  }, [route.kind])
 
-  if (!isAdminRoute) {
+  if (route.kind === 'public') {
     return <LandingPage draft={draft} />
   }
 
-  return (
-    <Suspense fallback={<AdminFallback />}>
-      <AdminApp
-        draft={draft}
-        setDraft={setDraft}
-        isDraftLoaded={isDraftLoaded}
-        deferRemotePersist={deferRemotePersist}
-        storageError={storageError}
-        setStorageError={setStorageError}
-        buildPublicUrl={buildPublicUrl}
-        buildPublicAdminUrl={buildPublicAdminUrl}
-      />
-    </Suspense>
-  )
+  if (route.kind === 'admin-dashboard') {
+    return (
+      <Suspense fallback={<AdminFallback />}>
+        <AdminDashboard
+          buildPublicUrlForBranch={buildPublicUrlForBranch}
+          buildAdminUrlForBranch={buildAdminUrlForBranch}
+        />
+      </Suspense>
+    )
+  }
+
+  if (route.kind === 'admin-branch') {
+    const branch = route.branch
+    return (
+      <Suspense fallback={<AdminFallback />}>
+        <AdminApp
+          branch={branch}
+          draft={draft}
+          setDraft={setDraft}
+          isDraftLoaded={isDraftLoaded}
+          deferRemotePersist={deferRemotePersist}
+          storageError={storageError}
+          setStorageError={setStorageError}
+          buildPublicUrl={() => buildPublicUrlForBranch(branch)}
+          buildPublicAdminUrl={() => buildAdminUrlForBranch(branch)}
+          buildAdminDashboardUrl={buildAdminDashboardUrl}
+        />
+      </Suspense>
+    )
+  }
+
+  return <NotFoundPage />
 }
 
 export default App

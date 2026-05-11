@@ -48,6 +48,73 @@
   text-transform: uppercase;
 }
 
+.branch-back-link {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.branch-back-link:hover {
+  text-decoration: underline;
+}
+
+.branch-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.branch-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+
+.branch-card header h2 {
+  margin: 0 0 4px;
+}
+
+.branch-card header p {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.branch-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.branch-card-urls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 8px;
+  margin: 0;
+}
+
+.branch-card-urls span {
+  color: var(--text-strong);
+  font-weight: 800;
+}
+
+.branch-card-urls code {
+  background: var(--soft-bg);
+  border-radius: 8px;
+  color: var(--accent);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  overflow: hidden;
+  padding: 4px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
 .preview-link {
   align-items: center;
   background: var(--text-strong);

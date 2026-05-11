@@ -1,16 +1,15 @@
 /**
- * מבצע preconnect+prefetch ל‑Supabase מוקדם ככל הניתן: רץ בזמן ייבוא המודול
- * (לפני React mount). הפונקציה loadDraftFromCloud תעדיף לקרוא את ה‑payload
- * מתוך אותה Promise במקום לפתוח חיבור חדש.
+ * preconnect + prefetch מוקדם של ה-payload לפי הסניף הנוכחי מה-URL.
+ * רץ בייבוא — לפני React mount.
  */
 import type { LandingDraft } from './draftTypes'
 import { normalizeDraft } from './draftStorage'
-
-const REMOTE_ROW_ID = 'default'
+import { BRANCHES, DEFAULT_BRANCH, findBranchBySlug } from './branches'
 
 declare global {
   interface Window {
-    __shlishukDraftRequest?: Promise<LandingDraft | null>
+    /** מילון לפי rowId → Promise של draft. */
+    __shlishukDraftRequests?: Record<string, Promise<LandingDraft | null>>
   }
 }
 
@@ -47,30 +46,52 @@ function preloadImage(src: string) {
   head.appendChild(link)
 }
 
-function isAdminPath() {
-  if (typeof window === 'undefined') return false
+function normalizedPathSuffix() {
+  if (typeof window === 'undefined') return '/'
   const base = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '')
   let suffix = window.location.pathname
   if (base && suffix.startsWith(base)) suffix = suffix.slice(base.length) || '/'
+  if (suffix.length > 1 && suffix.endsWith('/')) suffix = suffix.slice(0, -1)
   if (!suffix.startsWith('/')) suffix = `/${suffix}`
-  return suffix === '/admin' || suffix === '/admin/'
+  return suffix
 }
 
-export function startPublicDraftPrefetch() {
-  if (typeof window === 'undefined') return
-  if (window.__shlishukDraftRequest) return
+function isAdminPath() {
+  const suffix = normalizedPathSuffix()
+  return suffix === '/admin' || suffix.startsWith('/admin/')
+}
 
+function resolveBranchFromUrl() {
+  const suffix = normalizedPathSuffix()
+  // /admin or /admin/<slug>
+  if (suffix === '/admin' || suffix === '/admin/') {
+    return null // dashboard — לא טוענים branch ספציפי לפרה-פטץ'
+  }
+  if (suffix.startsWith('/admin/')) {
+    const slug = suffix.slice('/admin/'.length)
+    return findBranchBySlug(slug)
+  }
+  // ציבורי
+  if (suffix === '/' || suffix === '') return DEFAULT_BRANCH
+  const slug = suffix.replace(/^\/+/, '')
+  return findBranchBySlug(slug)
+}
+
+function startFetchForRowId(rowId: string) {
   const env = readEnv()
   if (!env) return
 
   const supabaseHost = new URL(env.url).origin
   injectPreconnect(supabaseHost)
 
+  if (!window.__shlishukDraftRequests) window.__shlishukDraftRequests = {}
+  if (rowId in window.__shlishukDraftRequests) return
+
   const endpoint = `${env.url}/rest/v1/shlishuk_draft?select=payload&id=eq.${encodeURIComponent(
-    REMOTE_ROW_ID,
+    rowId,
   )}`
 
-  window.__shlishukDraftRequest = fetch(endpoint, {
+  window.__shlishukDraftRequests[rowId] = fetch(endpoint, {
     headers: {
       apikey: env.anon,
       Authorization: `Bearer ${env.anon}`,
@@ -94,4 +115,16 @@ export function startPublicDraftPrefetch() {
       return draft
     })
     .catch(() => null)
+}
+
+export function startPublicDraftPrefetch() {
+  if (typeof window === 'undefined') return
+
+  const branch = resolveBranchFromUrl()
+  if (branch) {
+    startFetchForRowId(branch.rowId)
+  } else if (isAdminPath()) {
+    // אדמין dashboard — נטעין מראש את כל הסניפים (קל, JSON קטן)
+    for (const b of BRANCHES) startFetchForRowId(b.rowId)
+  }
 }

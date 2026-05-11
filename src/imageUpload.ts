@@ -108,11 +108,18 @@ function publicUrlForObject(supabaseUrl: string, path: string) {
   return `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/${BUCKET}/${path}`
 }
 
+function sanitizeBranchPrefix(rowId: string) {
+  return rowId.replace(/[^A-Za-z0-9_-]+/g, '-') || 'default'
+}
+
 /**
- * מעלה תמונה ל-Storage. אם אין לקוח Supabase מוגדר — נופל ל-base64 (offline/dev),
- * כך שהאדמין לא חסום בלי הגדרות.
+ * מעלה תמונה ל-Storage עם prefix של הסניף. אם אין לקוח Supabase מוגדר —
+ * נופל ל-base64 (offline/dev) כך שהאדמין לא חסום בלי הגדרות.
  */
-export async function uploadImage(file: File): Promise<UploadedImage> {
+export async function uploadImage(
+  file: File,
+  branchRowId: string,
+): Promise<UploadedImage> {
   const id = createId()
 
   const clientPromise = ensureSupabaseClient()
@@ -132,7 +139,10 @@ export async function uploadImage(file: File): Promise<UploadedImage> {
     .replace(/\.[^.]+$/, '')
     .replace(/[^\u0590-\u05FFa-zA-Z0-9-_]+/g, '-')
     .slice(0, 60) || 'image'
-  const objectPath = `${new Date().toISOString().slice(0, 10)}/${id}-${safeName}.${prepared.ext}`
+  const branchPrefix = sanitizeBranchPrefix(branchRowId)
+  const objectPath = `${branchPrefix}/${new Date()
+    .toISOString()
+    .slice(0, 10)}/${id}-${safeName}.${prepared.ext}`
 
   const client = await clientPromise
 
@@ -152,8 +162,11 @@ export async function uploadImage(file: File): Promise<UploadedImage> {
   }
 }
 
-export async function uploadImages(files: File[]): Promise<UploadedImage[]> {
-  return Promise.all(files.map((f) => uploadImage(f)))
+export async function uploadImages(
+  files: File[],
+  branchRowId: string,
+): Promise<UploadedImage[]> {
+  return Promise.all(files.map((f) => uploadImage(f, branchRowId)))
 }
 
 /** מחיקת קובץ ב-Storage לפי URL ציבורי שלנו. שגיאות נבלעות (לא חוסמות UI). */

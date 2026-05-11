@@ -1,14 +1,21 @@
 import { ensureSupabaseClient, isSupabaseConfigured } from './supabaseClient'
 import type { LandingDraft } from './draftTypes'
+import { DEFAULT_BRANCH } from './branches'
 
 export { isSupabaseConfigured }
 
 const DB_NAME = 'shlishuk-weekly-offers'
 const DB_VERSION = 1
-const DRAFT_KEY = 'current-draft'
 const LEGACY_STORAGE_KEY = 'shlishuk-weekly-offers-draft'
 const STORE_NAME = 'drafts'
-const REMOTE_ROW_ID = 'default'
+/** המפתח הישן שהיה בשימוש לפני multi-branch (נשמר כתאימות אחורה). */
+const LEGACY_INDEXEDDB_KEY = 'current-draft'
+
+function indexedDbKeyForRow(rowId: string) {
+  // אותו מפתח שהיה בעבר עבור ה-row הראשי, כדי לא לאבד טיוטה מקומית
+  if (rowId === DEFAULT_BRANCH.rowId) return LEGACY_INDEXEDDB_KEY
+  return `draft:${rowId}`
+}
 
 export const emptyDraft: LandingDraft = {
   title: '',
@@ -46,10 +53,13 @@ function openDraftDatabase(): Promise<IDBDatabase> {
   })
 }
 
-function readDraftFromDatabase(db: IDBDatabase): Promise<LandingDraft | null> {
+function readDraftFromDatabase(
+  db: IDBDatabase,
+  key: string,
+): Promise<LandingDraft | null> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, 'readonly')
-    const request = transaction.objectStore(STORE_NAME).get(DRAFT_KEY)
+    const request = transaction.objectStore(STORE_NAME).get(key)
 
     request.onsuccess = () => {
       resolve(request.result ? normalizeDraft(request.result) : null)
@@ -59,59 +69,64 @@ function readDraftFromDatabase(db: IDBDatabase): Promise<LandingDraft | null> {
   })
 }
 
-function writeDraftToDatabase(db: IDBDatabase, draft: LandingDraft) {
+function writeDraftToDatabase(db: IDBDatabase, draft: LandingDraft, key: string) {
   return new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, 'readwrite')
-    const request = transaction.objectStore(STORE_NAME).put(draft, DRAFT_KEY)
+    const request = transaction.objectStore(STORE_NAME).put(draft, key)
 
     request.onsuccess = () => resolve()
     request.onerror = () => reject(request.error)
   })
 }
 
-async function loadDraftFromIndexedDb(): Promise<LandingDraft> {
+async function loadDraftFromIndexedDb(rowId: string): Promise<LandingDraft> {
   try {
     const db = await openDraftDatabase()
-    const storedDraft = await readDraftFromDatabase(db)
+    const key = indexedDbKeyForRow(rowId)
+    const storedDraft = await readDraftFromDatabase(db, key)
     db.close()
 
     if (storedDraft) return storedDraft
 
-    const rawDraft = localStorage.getItem(LEGACY_STORAGE_KEY)
-    if (!rawDraft) return emptyDraft
+    // Legacy localStorage רק לסניף הראשי (היה שמור שם בפעם הראשונה)
+    if (rowId === DEFAULT_BRANCH.rowId) {
+      const rawDraft = localStorage.getItem(LEGACY_STORAGE_KEY)
+      if (rawDraft) {
+        return normalizeDraft(JSON.parse(rawDraft) as Partial<LandingDraft>)
+      }
+    }
 
-    return normalizeDraft(JSON.parse(rawDraft) as Partial<LandingDraft>)
+    return emptyDraft
   } catch {
     return emptyDraft
   }
 }
 
-async function saveDraftToIndexedDb(draft: LandingDraft) {
+async function saveDraftToIndexedDb(draft: LandingDraft, rowId: string) {
   const db = await openDraftDatabase()
-  await writeDraftToDatabase(db, draft)
+  await writeDraftToDatabase(db, draft, indexedDbKeyForRow(rowId))
   db.close()
 }
 
 /**
- * משיכת payload ישירות מ‑PostgREST של Supabase ללא הספרייה (חוסך chunk גדול
- * שמשפיע על הטעינה הראשונית של הדף הציבורי). אם startPublicDraftPrefetch כבר
- * התחיל בקשה — נשתמש בה במקום להפעיל בקשה חדשה.
+ * משיכת payload ישירות מ‑PostgREST של Supabase ללא הספרייה (חוסך chunk גדול).
+ * אם startPublicDraftPrefetch כבר התחיל בקשה לאותו rowId — נשתמש בה.
  */
-async function loadDraftFromSupabaseRest(): Promise<LandingDraft> {
+async function loadDraftFromSupabaseRest(rowId: string): Promise<LandingDraft> {
   const url = import.meta.env.VITE_SUPABASE_URL?.trim() ?? ''
   const anon = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() ?? ''
-  if (!url || !anon) return loadDraftFromIndexedDb()
+  if (!url || !anon) return loadDraftFromIndexedDb(rowId)
 
   const inflight =
-    typeof window !== 'undefined' ? window.__shlishukDraftRequest : undefined
-
-  if (inflight) {
-    const draft = await inflight
+    typeof window !== 'undefined' ? window.__shlishukDraftRequests : undefined
+  const cached = inflight?.[rowId]
+  if (cached) {
+    const draft = await cached
     if (draft) return draft
   }
 
   const endpoint = `${url.replace(/\/$/, '')}/rest/v1/shlishuk_draft?select=payload&id=eq.${encodeURIComponent(
-    REMOTE_ROW_ID,
+    rowId,
   )}`
 
   const response = await fetch(endpoint, {
@@ -133,7 +148,7 @@ async function loadDraftFromSupabaseRest(): Promise<LandingDraft> {
   return normalizeDraft(payload)
 }
 
-async function saveDraftToSupabase(draft: LandingDraft) {
+async function saveDraftToSupabase(draft: LandingDraft, rowId: string) {
   const clientAwaited = ensureSupabaseClient()
   if (!clientAwaited) throw new Error('Supabase not configured')
 
@@ -141,7 +156,7 @@ async function saveDraftToSupabase(draft: LandingDraft) {
 
   const { error } = await client.from('shlishuk_draft').upsert(
     {
-      id: REMOTE_ROW_ID,
+      id: rowId,
       payload: draft,
       updated_at: new Date().toISOString(),
     },
@@ -151,28 +166,33 @@ async function saveDraftToSupabase(draft: LandingDraft) {
   if (error) throw error
 }
 
-/** תצוגה מיידית מ‑IndexedDB (אחרי שמירה כפולה זה מקורב לענן). */
-export async function loadDraftFromBrowserCache(): Promise<LandingDraft> {
-  return loadDraftFromIndexedDb()
+/** תצוגה מיידית מ‑IndexedDB. */
+export async function loadDraftFromBrowserCache(
+  rowId: string,
+): Promise<LandingDraft> {
+  return loadDraftFromIndexedDb(rowId)
 }
 
 /** משיכה מהענן (REST ישיר). */
-export async function loadDraftFromCloud(): Promise<LandingDraft> {
-  return loadDraftFromSupabaseRest()
+export async function loadDraftFromCloud(rowId: string): Promise<LandingDraft> {
+  return loadDraftFromSupabaseRest(rowId)
 }
 
-export async function persistDraftLocally(draft: LandingDraft): Promise<void> {
-  await saveDraftToIndexedDb(draft)
+export async function persistDraftLocally(
+  draft: LandingDraft,
+  rowId: string,
+): Promise<void> {
+  await saveDraftToIndexedDb(draft, rowId)
 }
 
 /** זיכרון דפדפן תמיד, וגם הענן אם מוגדר. */
-export async function saveDraft(draft: LandingDraft) {
+export async function saveDraft(draft: LandingDraft, rowId: string) {
   try {
-    await saveDraftToIndexedDb(draft)
+    await saveDraftToIndexedDb(draft, rowId)
   } catch {
     /* לא חוסם שמירה בענן */
   }
   if (isSupabaseConfigured()) {
-    await saveDraftToSupabase(draft)
+    await saveDraftToSupabase(draft, rowId)
   }
 }

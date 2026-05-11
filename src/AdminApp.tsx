@@ -8,6 +8,7 @@ import {
 } from 'react'
 
 import type { LandingDraft, UploadedImage } from './draftTypes'
+import type { BranchConfig } from './branches'
 import { isSupabaseConfigured, saveDraft } from './draftStorage'
 import {
   deleteUploadedImage,
@@ -18,9 +19,9 @@ import {
 const AUTOSAVE_DEBOUNCE_MS = 350
 const SAVE_TIMEOUT_MS = 12000
 
-function saveDraftWithTimeout(draft: LandingDraft) {
+function saveDraftWithTimeout(draft: LandingDraft, rowId: string) {
   return Promise.race([
-    saveDraft(draft),
+    saveDraft(draft, rowId),
     new Promise<never>((_, reject) =>
       setTimeout(
         () => reject(new Error('שמירה לקחה יותר מדי. נסה שוב.')),
@@ -31,6 +32,7 @@ function saveDraftWithTimeout(draft: LandingDraft) {
 }
 
 type AdminAppProps = {
+  branch: BranchConfig
   draft: LandingDraft
   setDraft: Dispatch<SetStateAction<LandingDraft>>
   isDraftLoaded: boolean
@@ -39,6 +41,7 @@ type AdminAppProps = {
   setStorageError: (value: string) => void
   buildPublicUrl: () => string
   buildPublicAdminUrl: () => string
+  buildAdminDashboardUrl: () => string
 }
 
 type PreviewSlotId = 'logo' | 'hero' | 'secondary'
@@ -126,6 +129,7 @@ function UploadPreviewBlock({
 }
 
 export default function AdminApp({
+  branch,
   draft,
   setDraft,
   isDraftLoaded,
@@ -134,6 +138,7 @@ export default function AdminApp({
   setStorageError,
   buildPublicUrl,
   buildPublicAdminUrl,
+  buildAdminDashboardUrl,
 }: AdminAppProps) {
   const [copied, setCopied] = useState(false)
   const [copiedAdmin, setCopiedAdmin] = useState(false)
@@ -167,7 +172,7 @@ export default function AdminApp({
       if (inFlightSaveRef.current === null) break
     }
     const snapshot = draftRef.current
-    const promise = saveDraftWithTimeout(snapshot)
+    const promise = saveDraftWithTimeout(snapshot, branch.rowId)
     inFlightSaveRef.current = promise
     try {
       await promise
@@ -241,7 +246,7 @@ export default function AdminApp({
     setStorageError('')
     let image: UploadedImage
     try {
-      image = await uploadImage(file)
+      image = await uploadImage(file, branch.rowId)
     } catch {
       setStorageError('העלאת התמונה נכשלה. נסה תמונה קלה יותר.')
       event.target.value = ''
@@ -278,7 +283,7 @@ export default function AdminApp({
     setStorageError('')
     let images: UploadedImage[]
     try {
-      images = await uploadImages(files)
+      images = await uploadImages(files, branch.rowId)
     } catch {
       setStorageError('העלאת התמונה נכשלה. נסה תמונה קלה יותר.')
       event.target.value = ''
@@ -344,8 +349,13 @@ export default function AdminApp({
         ) : null}
 
         <div className="panel-heading">
-          <p className="eyebrow">SHLISHUK Back Office</p>
-          <h1 id="admin-title">בניית דף מבצעים שבועי</h1>
+          <p className="eyebrow">
+            SHLISHUK Back Office ·{' '}
+            <a className="branch-back-link" href={buildAdminDashboardUrl()}>
+              ‹ חזרה לרשימת הסניפים
+            </a>
+          </p>
+          <h1 id="admin-title">{branch.label}</h1>
           <p>
             העלאת תמונת פתיחה ותמונות מבצעים. התמונות אחרי הפתיחה מוצגות אחת מתחת
             לשנייה לפי סדר ההעלאה.
@@ -366,7 +376,7 @@ export default function AdminApp({
               target="_blank"
               rel="noreferrer"
             >
-              כתובת האדמין (להעתקה / לשימוש ב-GitHub Pages)
+              כתובת האדמין של הסניף הזה (להעתקה)
             </a>
           </p>
           {storageError ? (
