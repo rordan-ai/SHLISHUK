@@ -367,7 +367,7 @@ export default function AdminApp({
               target="_blank"
               rel="noreferrer"
             >
-              פתיחת הדף הציבורי
+              פתיחת דף שלישוק הציבורי
             </a>
             <span className="preview-links-sep"> · </span>
             <a

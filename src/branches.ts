@@ -19,7 +19,7 @@ export const BRANCHES: BranchConfig[] = [
   {
     rowId: 'default',
     slug: '',
-    label: 'מרכולית שילשוק (סניף ראשי)',
+    label: 'מרכולית שילשוק (שאר הסניפים)',
     subtitle: 'הדף הוותיק — דף הבית של האתר',
   },
   {
@@ -41,6 +41,8 @@ export function findBranchBySlug(slug: string | null | undefined): BranchConfig 
   if (!slug) return DEFAULT_BRANCH
   const normalized = slug.replace(/\/+$/, '').replace(/^\/+/, '')
   if (normalized === '') return DEFAULT_BRANCH
+  // תאימות: /admin/default מפנה לסניף ברירת המחדל
+  if (normalized.toLowerCase() === 'default') return DEFAULT_BRANCH
   return (
     BRANCHES.find((b) => b.slug.toUpperCase() === normalized.toUpperCase()) ?? null
   )

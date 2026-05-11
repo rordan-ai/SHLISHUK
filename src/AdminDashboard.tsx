@@ -36,7 +36,7 @@ export default memo(function AdminDashboard({
                   className="upload-button"
                   href={buildAdminUrlForBranch(branch)}
                 >
-                  ניהול הסניף
+                  ניהול הדף
                 </a>
                 <a
                   className="ghost-button"
@@ -44,7 +44,7 @@ export default memo(function AdminDashboard({
                   target="_blank"
                   rel="noreferrer"
                 >
-                  פתיחת הדף הציבורי
+                  פתיחת דף שלישוק הציבורי
                 </a>
               </div>
 
