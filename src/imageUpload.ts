@@ -135,9 +135,12 @@ export async function uploadImage(
   }
 
   const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? '').trim()
+  // Supabase Storage object keys מקבלים רק ASCII. שמות עברית נדחים עם 400.
+  // השם המקורי (כולל עברית) נשמר ב-UploadedImage.name לתצוגה ב-UI.
   const safeName = file.name
     .replace(/\.[^.]+$/, '')
-    .replace(/[^\u0590-\u05FFa-zA-Z0-9-_]+/g, '-')
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
     .slice(0, 60) || 'image'
   const branchPrefix = sanitizeBranchPrefix(branchRowId)
   const objectPath = `${branchPrefix}/${new Date()
