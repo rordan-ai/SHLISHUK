@@ -30,7 +30,11 @@ if (existsSync(join(dist, 'index.html')) && existsSync(join(dist, '404.html'))) 
 
 if (process.env.GITHUB_PAGES === '1') {
   const html = readFileSync(join(dist, 'index.html'), 'utf8')
-  must(html.includes('/SHLISHUK/'), 'index.html לא משתמש ב-base /SHLISHUK/ — בנה עם GITHUB_PAGES=1')
+  // אתר משתמש (rordan-ai.github.io) מוגש מהשורש — base /
+  must(
+    html.includes('src="/assets/') || html.includes("src='/assets/"),
+    'index.html לא משתמש ב-base / — בנה עם GITHUB_PAGES=1',
+  )
 }
 
 let sawSupabaseHint = false

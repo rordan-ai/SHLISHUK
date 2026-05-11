@@ -24,7 +24,7 @@ export const BRANCHES: BranchConfig[] = [
   },
   {
     rowId: 'ZICHRON_GADA',
-    slug: 'ZICHRON_GADA',
+    slug: 'zg',
     label: 'מרכולית שילשוק — זכרון יעקב / גבעת עדה',
     subtitle: 'סניף זכרון יעקב / גבעת עדה',
   },
@@ -43,7 +43,12 @@ export function findBranchBySlug(slug: string | null | undefined): BranchConfig 
   if (normalized === '') return DEFAULT_BRANCH
   // תאימות: /admin/default מפנה לסניף ברירת המחדל
   if (normalized.toLowerCase() === 'default') return DEFAULT_BRANCH
+  // תאימות לאחור: הסלאג הישן ZICHRON_GADA יפנה לסלאג החדש
+  const lower = normalized.toLowerCase()
+  if (lower === 'zichron_gada' || lower === 'zichron-gada') {
+    return BRANCHES.find((b) => b.rowId === 'ZICHRON_GADA') ?? null
+  }
   return (
-    BRANCHES.find((b) => b.slug.toUpperCase() === normalized.toUpperCase()) ?? null
+    BRANCHES.find((b) => b.slug.toLowerCase() === lower) ?? null
   )
 }

@@ -1,10 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// פריסת GitHub Pages: GITHUB_PAGES=1 ב-CI מגדיר base ל־/{שם_ריפו}/
+// פריסת GitHub Pages (אתר משתמש rordan-ai.github.io) — base /
 export default defineConfig({
   plugins: [react()],
-  base: process.env.GITHUB_PAGES === '1' ? '/SHLISHUK/' : '/',
+  base: '/',
   server: {
     host: true,
     port: 5173,
