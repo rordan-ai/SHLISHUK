@@ -375,7 +375,7 @@ export default function AdminApp({
               target="_blank"
               rel="noreferrer"
             >
-              פתיחת דף שלישוק הציבורי
+              {branch.publicCtaLabel ?? 'פתיחת דף שלישוק הציבורי'}
             </a>
             <span className="preview-links-sep"> · </span>
             <a
