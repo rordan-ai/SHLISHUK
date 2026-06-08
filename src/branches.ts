@@ -28,6 +28,11 @@ export const BRANCHES: BranchConfig[] = [
     label: 'מרכולית שילשוק — זכרון יעקב / גבעת עדה',
     subtitle: 'סניף זכרון יעקב / גבעת עדה',
   },
+  {
+    rowId: 'MIVTZAIM',
+    slug: 'mivtzaim',
+    label: 'דף מבצעים',
+  },
 ]
 
 export const DEFAULT_BRANCH = BRANCHES[0]
