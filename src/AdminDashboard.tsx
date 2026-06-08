@@ -44,7 +44,7 @@ export default memo(function AdminDashboard({
                   target="_blank"
                   rel="noreferrer"
                 >
-                  פתיחת דף שלישוק הציבורי
+                  {branch.publicCtaLabel ?? 'פתיחת דף שלישוק הציבורי'}
                 </a>
               </div>
 

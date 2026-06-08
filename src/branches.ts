@@ -13,6 +13,8 @@ export type BranchConfig = {
   label: string
   /** תיאור משני */
   subtitle?: string
+  /** טקסט הכפתור לפתיחת הדף הציבורי. ברירת מחדל: "פתיחת דף שלישוק הציבורי". */
+  publicCtaLabel?: string
 }
 
 export const BRANCHES: BranchConfig[] = [
@@ -32,6 +34,7 @@ export const BRANCHES: BranchConfig[] = [
     rowId: 'MIVTZAIM',
     slug: 'mivtzaim',
     label: 'דף מבצעים',
+    publicCtaLabel: 'פתיחת דף המבצעים הציבורי',
   },
 ]
 
