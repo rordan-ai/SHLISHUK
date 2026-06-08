@@ -50,7 +50,13 @@ export default memo(function AdminDashboard({
 
               <p className="branch-card-urls">
                 <span>כתובת ציבורית:</span>
-                <code>{buildPublicUrlForBranch(branch)}</code>
+                <a
+                  href={buildPublicUrlForBranch(branch)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <code>{buildPublicUrlForBranch(branch)}</code>
+                </a>
               </p>
             </article>
           ))}
