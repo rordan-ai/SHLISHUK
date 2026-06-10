@@ -1,6 +1,26 @@
 import { ensureSupabaseClient, isSupabaseConfigured } from './supabaseClient'
-import type { LandingDraft } from './draftTypes'
+import type { LandingDraft, UploadedImage } from './draftTypes'
 import { DEFAULT_BRANCH } from './branches'
+
+function isDataUrl(src: string | undefined): boolean {
+  return typeof src === 'string' && src.startsWith('data:')
+}
+
+function stripDataUrlImage(image: UploadedImage | null): UploadedImage | null {
+  if (!image || isDataUrl(image.src)) return null
+  return image
+}
+
+/** מונע payload ענק ב-DB — base64 נשאר רק ב-IndexedDB מקומי (dev). */
+export function stripBase64FromDraft(draft: LandingDraft): LandingDraft {
+  return {
+    ...draft,
+    logoImage: stripDataUrlImage(draft.logoImage),
+    heroImage: stripDataUrlImage(draft.heroImage),
+    secondaryImage: stripDataUrlImage(draft.secondaryImage),
+    offerImages: draft.offerImages.filter((image) => !isDataUrl(image.src)),
+  }
+}
 
 export { isSupabaseConfigured }
 
@@ -30,14 +50,14 @@ export const emptyDraft: LandingDraft = {
 }
 
 export function normalizeDraft(draft: Partial<LandingDraft>): LandingDraft {
-  return {
+  return stripBase64FromDraft({
     ...emptyDraft,
     ...draft,
     socialLinks: {
       ...emptyDraft.socialLinks,
       ...draft.socialLinks,
     },
-  }
+  })
 }
 
 function openDraftDatabase(): Promise<IDBDatabase> {
@@ -153,11 +173,12 @@ async function saveDraftToSupabase(draft: LandingDraft, rowId: string) {
   if (!clientAwaited) throw new Error('Supabase not configured')
 
   const client = await clientAwaited
+  const cloudDraft = stripBase64FromDraft(draft)
 
   const { error } = await client.from('shlishuk_draft').upsert(
     {
       id: rowId,
-      payload: draft,
+      payload: cloudDraft,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'id' },

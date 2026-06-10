@@ -13,6 +13,9 @@ dist-ssr
 *.local
 .tmp-gh-secret-*
 
+# גיבויי DB מלאים (base64 גדול) — נשמרים מקומית בלבד
+setup/backups/**/*-full.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

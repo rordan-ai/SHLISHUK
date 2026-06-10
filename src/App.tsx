@@ -1,9 +1,13 @@
 import {
   Suspense,
   lazy,
+  useCallback,
   useEffect,
   useLayoutEffect,
+  useRef,
   useState,
+  type Dispatch,
+  type SetStateAction,
 } from 'react'
 import './App.css'
 
@@ -153,6 +157,17 @@ function App() {
   const [deferRemotePersist, setDeferRemotePersist] = useState(
     () => isAdminBranchRoute && isSupabaseConfigured(),
   )
+  const userEditedDuringLoadRef = useRef(false)
+
+  const setDraftTracked = useCallback<Dispatch<SetStateAction<LandingDraft>>>(
+    (value) => {
+      if (!isDraftLoaded) {
+        userEditedDuringLoadRef.current = true
+      }
+      setDraft(value)
+    },
+    [isDraftLoaded],
+  )
 
   useEffect(() => {
     function onPopState() {
@@ -166,6 +181,7 @@ function App() {
     if (!branchForData) return
     let cancel = false
     const rowId = branchForData.rowId
+    userEditedDuringLoadRef.current = false
     ;(async () => {
       setDraft(emptyDraft)
       setIsDraftLoaded(false)
@@ -183,7 +199,9 @@ function App() {
           const remote = await loadDraftFromCloud(rowId)
           if (!cancel) {
             await persistDraftLocally(remote, rowId)
-            setDraft(remote)
+            if (!userEditedDuringLoadRef.current) {
+              setDraft(remote)
+            }
           }
         } catch {
           if (!cancel && isAdminBranchRoute) {
@@ -287,7 +305,7 @@ function App() {
         <AdminApp
           branch={branch}
           draft={draft}
-          setDraft={setDraft}
+          setDraft={setDraftTracked}
           isDraftLoaded={isDraftLoaded}
           deferRemotePersist={deferRemotePersist}
           storageError={storageError}
