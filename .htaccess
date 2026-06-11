@@ -1,0 +1,9 @@
+RewriteEngine On
+RewriteBase /
+# HTTPS
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+# SPA: כל נתיב לא-קיים → index.html (ניתוב צד-לקוח: /, /zg, /mivtzaim, /admin)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.html [L]
