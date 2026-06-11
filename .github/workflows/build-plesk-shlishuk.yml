@@ -1,0 +1,71 @@
+name: Build shlishuk for Plesk subdomain
+
+# בונה את שלישוק (3 הדפים + אדמין) ודוחף את ה-dist לענף `plesk-shlishuk`
+# ש-Plesk Git מושך אל תת-הדומיין shlishuk.markolitly.co.il.
+# ⚠️ לא נוגע ב-main ולא ב-GitHub Pages — רץ רק על ענף plesk-shlishuk-ci.
+
+on:
+  push:
+    branches: [plesk-shlishuk-ci]
+  workflow_dispatch:
+
+concurrency:
+  group: build-plesk-shlishuk
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+  VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+  # מוגדר לתת-הדומיין במפורש — לא נוגע ב-secret VITE_PUBLIC_SITE_URL (שמשמש את GitHub Pages)
+  VITE_PUBLIC_SITE_URL: https://shlishuk.markolitly.co.il
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: אימות Secrets של Supabase
+        run: |
+          if [ -z "${{ secrets.VITE_SUPABASE_URL }}" ]; then echo "::error::חסר VITE_SUPABASE_URL"; exit 1; fi
+          if [ -z "${{ secrets.VITE_SUPABASE_ANON_KEY }}" ]; then echo "::error::חסר VITE_SUPABASE_ANON_KEY"; exit 1; fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: SPA fallback ל-Apache (.htaccess) — מחליף את 404.html של GitHub Pages
+        run: |
+          cat > dist/.htaccess <<'EOF'
+          RewriteEngine On
+          RewriteBase /
+          # HTTPS
+          RewriteCond %{HTTPS} off
+          RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+          # SPA: כל נתיב לא-קיים → index.html (ניתוב צד-לקוח: /, /zg, /mivtzaim, /admin)
+          RewriteCond %{REQUEST_FILENAME} !-f
+          RewriteCond %{REQUEST_FILENAME} !-d
+          RewriteRule . /index.html [L]
+          EOF
+
+      - name: דחיפת dist לענף plesk-shlishuk (שורש = האתר הבנוי)
+        run: |
+          set -euo pipefail
+          test -f dist/index.html || { echo "::error::dist/index.html חסר"; exit 1; }
+          cd dist
+          git init -q -b plesk-shlishuk
+          git config user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+          git add -A
+          git commit -q -m "Build shlishuk for subdomain from ${GITHUB_SHA}"
+          git push -q --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" plesk-shlishuk
+          echo "✅ נדחף ענף plesk-shlishuk"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
